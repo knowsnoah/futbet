@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><em>FutBet - Premier League Odds and Value Site</em></title>
+    <title>FutBet - Premier League Odds and Value Site</title>
     <!-- this is the jquery url for javascript functions-->
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
 
@@ -12,10 +12,42 @@
 
 <body>
     <!-- Welcome Page for the website -->
-    <h1>Welcome to FutBet - Your Premier League Odds and Value Site</h1>
+    <h1><em>Welcome to FutBet - Your Premier League Odds and Value Site</em></h1>
     <p>Discover the best odds and value for Premier League matches with FutBet. Stay ahead of the game and make informed betting decisions.</p>
-    <input type="text" placeholder="Search for a teams or matches..."/>
-    <button>Search</button>
+  
+    <form id="searchForm">
+        <input type="text" id="searchInput" placeholder="Search for teams or matches..."/>
+        <button id="searchButton">Search</button>
+    </form>
+
+    <div id="results"></div>
+
+    <script>
+        $("#searchForm").submit(function(event) {
+            event.preventDefault(); // prevents page reload
+
+            const teamName = $("#searchInput").val().trim();
+
+            if (!teamName) {
+                $("#results").html("<p>Please enter a team name.</p>");
+                return;
+            }
+
+            $.get("/search", { name: teamName }, function(data) {
+                $("#results").html("");
+
+                if (data.length === 0) {
+                    $("#results").append("<p>No teams found.</p>");
+                } else {
+                    data.forEach(function(team) {
+                        $("#results").append("<p>" + team.name + "</p>");
+                    });
+                }
+            });
+        });
+
+    </script>
+
 </body>
 
 </html>

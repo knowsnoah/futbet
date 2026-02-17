@@ -1,4 +1,4 @@
-from flask import Flask, render_template
+from flask import Flask, jsonify, render_template, request
 
 app = Flask(__name__)
 
@@ -25,13 +25,18 @@ teams = [
 def home():
     return render_template("index.html")
 
-@app.route("/search/<name>")
-def search_team(name):
+
+@app.route("/search")
+def search_team():
+    name = request.args.get("name", "")
     result = []
     for team in teams:
         if team["name"].lower() == name.lower():
             result.append(team)
             
-    return result
+    return jsonify(result)
 
-app.run(host ="0.0.0.0", port=5005)
+
+
+if __name__ == "__main__":
+    app.run(host ="0.0.0.0", port=5005, debug=True)
