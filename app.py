@@ -1,6 +1,13 @@
 from flask import Flask, jsonify, render_template, request
+import os
+import requests
+from datetime import datetime, timedelta
 
 app = Flask(__name__)
+
+#API KEY and Base URL for API Football
+API_KEY = os.getenv("APIFOOTBALL_KEY")
+BASE_URL = "https://v3.football.api-sports.io"
 
 
 teams = [
