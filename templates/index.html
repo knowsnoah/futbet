@@ -21,7 +21,8 @@
     </form>
 
     <div id="results"></div>
-
+    <div id="valueBets"></div>
+    
 <script>
 function renderMatches(title, matches) {
   let html = `<h2 style="margin-top:20px;">${title}</h2>`;
@@ -59,6 +60,8 @@ $("#searchForm").submit(function(event) {
     return;
   }
 
+  $("#valueBets").html(""); // clear value bets when doing a new search
+
   $.get("/search", { name: teamName }, function(teams) {
     $("#results").html("");
 
@@ -82,22 +85,58 @@ $(document).on("click", ".teamRow", function() {
   const teamId = $(this).data("teamid");
 
   $("#results").html("<p>Loading previous and upcoming matches...</p>");
+  $("#valueBets").html("<p>Loading value bets...</p>");
 
-  // Fetch both at the same time
   const last5Req = $.get(`/team/${teamId}/last5`);
   const next5Req = $.get(`/team/${teamId}/next5`);
+  const valueReq = $.get(`/team/${teamId}/value_simple`);
 
-  $.when(last5Req, next5Req).done(function(last5Res, next5Res) {
-    const last5 = last5Res[0]; // jQuery returns [data, status, xhr]
+  $.when(last5Req, next5Req, valueReq).done(function(last5Res, next5Res, valueRes) {
+    const last5 = last5Res[0];
     const next5 = next5Res[0];
+    const valueData = valueRes[0];
 
+    // Matches section
     let html = "";
     html += renderMatches("Previous 5 Matches (Played)", last5);
     html += renderMatches("Next 5 Matches (Upcoming)", next5);
-
     $("#results").html(html);
+
+    // Value Bets section
+    let vhtml = "<h2 style='margin-top:20px;'>Value Bets (Upcoming)</h2>";
+
+    if (!valueData || valueData.length === 0) {
+      vhtml += "<p>No value bet data found.</p>";
+      $("#valueBets").html(vhtml);
+      return;
+    }
+
+    valueData.forEach(item => {
+      if (!item.oddsFound) {
+        vhtml += `<p>No odds found for ${item.match.homeTeam.name} vs ${item.match.awayTeam.name}</p>`;
+        return;
+      }
+
+      const m = item.match;
+      const odds = item.bestOdds;
+      const prob = item.modelProb;
+      const val = item.value;
+
+      vhtml += `
+        <div style="margin-bottom:15px; border-bottom:1px solid #ccc; padding-bottom:10px;">
+          <strong>${m.homeTeam.name} vs ${m.awayTeam.name}</strong><br>
+          Odds (H/D/A): ${odds.home} / ${odds.draw} / ${odds.away}<br>
+          Model Prob (H/A): ${prob.home} / ${prob.away}<br>
+          Value (H/A): ${val.home} / ${val.away}
+        </div>
+      `;
+    });
+
+    $("#valueBets").html(vhtml);
+
   }).fail(function() {
     $("#results").html("<p>Error loading matches.</p>");
+    $("#valueBets").html("<p>Error loading value bets.</p>");
   });
 });
 </script>
