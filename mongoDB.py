@@ -1,11 +1,20 @@
+import os
 from pymongo.mongo_client import MongoClient
 from pymongo.server_api import ServerApi
+from dotenv import load_dotenv
 
-uri = "mongodb+srv://ojedanoah24_db_user:vHSjuxnqMNcb5Etp@cluster0.xv1xa1v.mongodb.net/?appName=Cluster0"
-# Create a new client and connect to the server
+# Load environment variables from .env
+load_dotenv()
+
+# Get URI from environment
+uri = os.getenv("MONGO_URI")
+
+if not uri:
+    raise ValueError("MONGO_URI not found in .env file")
+
+# Create Mongo client
 client = MongoClient(uri, server_api=ServerApi('1'))
 
-# Send a ping to confirm a successful connection
 try:
     client.admin.command('ping')
     print("Pinged your deployment. You successfully connected to MongoDB!")
