@@ -1,8 +1,7 @@
 from pymongo.mongo_client import MongoClient
 from pymongo.server_api import ServerApi
 
-uri = "mongodb+srv://nsojeda_db_user:<Soccerfl123>@futbet.9yiyooc.mongodb.net/?appName=futbet"
-
+uri = "mongodb+srv://ojedanoah24_db_user:vHSjuxnqMNcb5Etp@cluster0.xv1xa1v.mongodb.net/?appName=Cluster0"
 # Create a new client and connect to the server
 client = MongoClient(uri, server_api=ServerApi('1'))
 
@@ -12,3 +11,4 @@ try:
     print("Pinged your deployment. You successfully connected to MongoDB!")
 except Exception as e:
     print(e)
+

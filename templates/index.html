@@ -22,39 +22,85 @@
 
     <div id="results"></div>
 
-    <script>
-        $("#searchForm").submit(function(event) {
-            event.preventDefault(); // prevents page reload
+<script>
+function renderMatches(title, matches) {
+  let html = `<h2 style="margin-top:20px;">${title}</h2>`;
 
-            const teamName = $("#searchInput").val().trim();
+  if (!matches || matches.length === 0) {
+    html += "<p>No matches found.</p>";
+    return html;
+  }
 
-            if (!teamName) {
-                $("#results").html("<p>Please enter a team name.</p>");
-                return;
-            }
+  matches.forEach(function(m) {
+    const ft = (m.score && m.score.fullTime) ? m.score.fullTime : {};
+    const score = (ft.home == null || ft.away == null) ? "TBD" : `${ft.home} - ${ft.away}`;
 
-            $.get("/search", { name: teamName }, function(data) {
-                $("#results").html("");
+    const date = new Date(m.utcDate);
+    const formattedDate = date.toLocaleDateString();
 
-                if (data.length === 0) {
-                    $("#results").append("<p>No teams found.</p>");
-                } else {
-                    data.forEach(function(team) {
-                        $("#results").append("<p>" + team.name + "</p>");
-                    });
-                }
-            });
-        });
+    html += `
+      <div style="margin-bottom:12px; padding:10px; border-bottom:1px solid #ccc;">
+        <div><strong>${formattedDate}</strong></div>
+        <div>${m.homeTeam.name} vs ${m.awayTeam.name} ${score !== "TBD" ? `| <strong>${score}</strong>` : ""}</div>
+        <div>Status: ${m.status}</div>
+      </div>
+    `;
+  });
 
-    </script>
+  return html;
+}
 
-    <script>
-        fetch("/epl/matches")
-        .then(response => response.json())
-        .then(data => {
-            console.log(data);
-        });
-    </script>
+$("#searchForm").submit(function(event) {
+  event.preventDefault();
+
+  const teamName = $("#searchInput").val().trim();
+  if (!teamName) {
+    $("#results").html("<p>Please enter a team name.</p>");
+    return;
+  }
+
+  $.get("/search", { name: teamName }, function(teams) {
+    $("#results").html("");
+
+    if (teams.length === 0) {
+      $("#results").append("<p>No teams found.</p>");
+      return;
+    }
+
+    teams.forEach(function(team) {
+      $("#results").append(`
+        <div class="teamRow" data-teamid="${team.id}"
+             style="cursor:pointer; padding:6px; border-bottom:1px solid #444;">
+          <strong>${team.name}</strong>
+        </div>
+      `);
+    });
+  });
+});
+
+$(document).on("click", ".teamRow", function() {
+  const teamId = $(this).data("teamid");
+
+  $("#results").html("<p>Loading previous and upcoming matches...</p>");
+
+  // Fetch both at the same time
+  const last5Req = $.get(`/team/${teamId}/last5`);
+  const next5Req = $.get(`/team/${teamId}/next5`);
+
+  $.when(last5Req, next5Req).done(function(last5Res, next5Res) {
+    const last5 = last5Res[0]; // jQuery returns [data, status, xhr]
+    const next5 = next5Res[0];
+
+    let html = "";
+    html += renderMatches("Previous 5 Matches (Played)", last5);
+    html += renderMatches("Next 5 Matches (Upcoming)", next5);
+
+    $("#results").html(html);
+  }).fail(function() {
+    $("#results").html("<p>Error loading matches.</p>");
+  });
+});
+</script>
 
 
 </body>
