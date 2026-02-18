@@ -48,6 +48,15 @@
 
     </script>
 
+    <script>
+        fetch("/epl/matches")
+        .then(response => response.json())
+        .then(data => {
+            console.log(data);
+        });
+    </script>
+
+
 </body>
 
 </html>

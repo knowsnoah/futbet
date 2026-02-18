@@ -5,9 +5,8 @@ from datetime import datetime, timedelta
 
 app = Flask(__name__)
 
-#API KEY and Base URL for API Football
-API_KEY = os.getenv("APIFOOTBALL_KEY")
-BASE_URL = "https://v3.football.api-sports.io"
+#API KEY for footbal data API
+API_KEY = os.getenv("FOOTBALL_DATA_KEY", "4680440494784f4393b42099061700fd")
 
 
 teams = [
@@ -42,6 +41,24 @@ def search_team():
             result.append(team)
             
     return jsonify(result)
+
+
+@app.route("/epl/matches")
+def get_matches():
+    headers = {"X-Auth-Token": API_KEY}
+    url = "https://api.football-data.org/v4/competitions/PL/matches"
+    response = requests.get(url, headers=headers)
+
+    # ✅ If API error, return useful info to your browser
+    if response.status_code != 200:
+        return jsonify({
+            "error": "Football-data API request failed",
+            "status_code": response.status_code,
+            "details": response.text
+        }), response.status_code
+
+    # ✅ Return the JSON so the browser / frontend can use it
+    return jsonify(response.json())
 
 
 
