@@ -13,6 +13,9 @@ app = Flask(__name__)
 load_dotenv()
 
 MONGO_URI = os.getenv("MONGO_URI")
+if not MONGO_URI:
+    raise RuntimeError("MONGO_URI not set (did .env load on EC2?)")
+
 API_KEY = os.getenv("FOOTBALL_DATA_KEY")
 ODDS_API_KEY = os.getenv("ODDS_API_KEY")
 client = MongoClient(MONGO_URI, tls=True, tlsCAFile=certifi.where())
