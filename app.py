@@ -2,15 +2,13 @@ from flask import Flask, jsonify, render_template, request
 import os
 import requests
 from datetime import datetime, timedelta
-from pymongo import MongoClient
+from pymongo import MongoClient, UpdateOne
 from dotenv import load_dotenv
-from pymongo import UpdateOne
-from math import exp
-
+from math import exp  # (still here even if unused)
 
 app = Flask(__name__)
 
-#loading enviornment variables from .env file
+# loading enviornment variables from .env file
 load_dotenv()
 
 MONGO_URI = os.getenv("MONGO_URI")
@@ -23,7 +21,18 @@ teams_col = db["teams"]
 matches_col = db["matches"]
 odds_col = db["odds"]
 
-#function for simplifying the team names
+# NEW: meta collection for refresh timestamps
+meta_col = db["meta"]
+
+# NEW: how often to refresh automatically (every few hours)
+AUTO_REFRESH_HOURS = 12
+
+
+# -------------------------
+# Helpers
+# -------------------------
+
+# function for simplifying the team names
 def norm_team(name: str) -> str:
     if not name:
         return ""
@@ -33,7 +42,24 @@ def norm_team(name: str) -> str:
             .replace("&", "and")
             .strip())
 
-#function for calculating the form score of a team based on the last 5 matches
+
+# NEW: stale-check helpers
+def is_stale(key: str, hours: int = AUTO_REFRESH_HOURS) -> bool:
+    doc = meta_col.find_one({"key": key}, {"_id": 0, "lastRefresh": 1})
+    if not doc or not doc.get("lastRefresh"):
+        return True
+    return (datetime.utcnow() - doc["lastRefresh"]) > timedelta(hours=hours)
+
+
+def set_refreshed(key: str):
+    meta_col.update_one(
+        {"key": key},
+        {"$set": {"lastRefresh": datetime.utcnow()}},
+        upsert=True
+    )
+
+
+# function for calculating the form score of a team based on the last 5 matches
 def team_form_score(team_id):
     last5 = list(matches_col.find(
         {
@@ -58,8 +84,8 @@ def team_form_score(team_id):
         is_home = m["homeTeam"]["id"] == team_id
         team_goals = hg if is_home else ag
         opp_goals = ag if is_home else hg
-        
-        #Points: win +3., draw +1, loss 0
+
+        # Points: win +3, draw +1, loss 0
         if team_goals > opp_goals:
             points += 3
         elif team_goals == opp_goals:
@@ -67,6 +93,150 @@ def team_form_score(team_id):
 
     return points
 
+
+# -------------------------
+# NEW: refresh logic as callable functions
+# -------------------------
+
+def do_refresh_epl():
+    if not API_KEY:
+        raise RuntimeError("Missing FOOTBALL_DATA_KEY in .env")
+    if not MONGO_URI:
+        raise RuntimeError("Missing MONGO_URI in .env")
+
+    headers = {"X-Auth-Token": API_KEY}
+    url = "https://api.football-data.org/v4/competitions/PL/matches"
+    r = requests.get(url, headers=headers)
+
+    if r.status_code != 200:
+        raise RuntimeError(f"football-data API request failed ({r.status_code}): {r.text}")
+
+    data = r.json()
+    matches = data.get("matches", [])
+    season = data.get("filters", {}).get("season")
+
+    team_ops = []
+    match_ops = []
+
+    for m in matches:
+        home = m["homeTeam"]
+        away = m["awayTeam"]
+
+        # upsert teams
+        for t in (home, away):
+            team_ops.append(
+                UpdateOne(
+                    {"id": t["id"]},
+                    {"$set": {
+                        "id": t["id"],
+                        "name": t["name"],
+                        "shortName": t.get("shortName"),
+                        "tla": t.get("tla"),
+                        "crest": t.get("crest")
+                    }},
+                    upsert=True
+                )
+            )
+
+        # upsert match
+        match_doc = {
+            "id": m["id"],
+            "utcDate": m.get("utcDate"),
+            "status": m.get("status"),
+            "matchday": m.get("matchday"),
+            "season": season,
+            "homeTeam": {"id": home["id"], "name": home["name"]},
+            "awayTeam": {"id": away["id"], "name": away["name"]},
+            "score": m.get("score", {})
+        }
+
+        match_ops.append(
+            UpdateOne({"id": m["id"]}, {"$set": match_doc}, upsert=True)
+        )
+
+    if team_ops:
+        teams_col.bulk_write(team_ops, ordered=False)
+    if match_ops:
+        matches_col.bulk_write(match_ops, ordered=False)
+
+    set_refreshed("matches")
+
+    return {
+        "ok": True,
+        "teams_upserted": len(team_ops),
+        "matches_upserted": len(match_ops)
+    }
+
+
+def do_refresh_odds():
+    if not ODDS_API_KEY:
+        raise RuntimeError("Missing ODDS_API_KEY in .env")
+
+    url = "https://api.the-odds-api.com/v4/sports/soccer_epl/odds"
+    params = {
+        "apiKey": ODDS_API_KEY,
+        "regions": "us",
+        "markets": "h2h",
+        "oddsFormat": "decimal",
+        "dateFormat": "iso"
+    }
+
+    r = requests.get(url, params=params)
+
+    if r.status_code != 200:
+        raise RuntimeError(f"Odds API failed ({r.status_code}): {r.text}")
+
+    events = r.json()
+
+    ops = []
+    pulled_at = datetime.utcnow().isoformat() + "Z"
+
+    for e in events:
+        doc = {
+            "eventId": e.get("id"),
+            "commenceTime": e.get("commence_time"),
+            "homeTeam": e.get("home_team"),
+            "awayTeam": e.get("away_team"),
+            "homeTeamNorm": norm_team(e.get("home_team")),
+            "awayTeamNorm": norm_team(e.get("away_team")),
+            "bookmakers": [],
+            "pulledAt": pulled_at
+        }
+
+        for b in e.get("bookmakers", []):
+            for m in b.get("markets", []):
+                if m.get("key") == "h2h":
+                    outcomes = {o["name"]: o["price"] for o in m.get("outcomes", [])}
+                    doc["bookmakers"].append({
+                        "key": b.get("key"),
+                        "title": b.get("title"),
+                        "lastUpdate": b.get("last_update"),
+                        "h2h": {
+                            "home": outcomes.get(doc["homeTeam"]),
+                            "draw": outcomes.get("Draw"),
+                            "away": outcomes.get(doc["awayTeam"])
+                        }
+                    })
+
+        if doc["eventId"]:
+            ops.append(
+                UpdateOne({"eventId": doc["eventId"]}, {"$set": doc}, upsert=True)
+            )
+
+    if ops:
+        odds_col.bulk_write(ops, ordered=False)
+
+    set_refreshed("odds")
+
+    return {
+        "ok": True,
+        "eventsStored": len(ops)
+    }
+
+
+# -------------------------
+# Routes
+# -------------------------
 
 @app.route("/")
 def home():
@@ -96,8 +266,8 @@ def team_matches(team_id):
 
     return jsonify(matches)
 
-#To display the last 5 matches of a team, we need to filter by status "FINISHED" and sort by date descending. 
-#For the next 5 matches, we filter by status "SCHEDULED" or "TIMED" and sort by date ascending
+
+# To display the last 5 matches of a team, we need to filter by status "FINISHED" and sort by date descending.
 @app.route("/team/<int:team_id>/last5")
 def team_last5(team_id):
     matches = list(matches_col.find(
@@ -112,9 +282,18 @@ def team_last5(team_id):
 
     return jsonify(matches)
 
-#To display the last 5 matches of a team, we need to filter by status "FINISHED" and sort by date descending.
-@app.route("/team/<int:team_id>/next5") 
+
+# To display the next 5 matches, we filter by status "SCHEDULED" or "TIMED" and sort by date ascending
+@app.route("/team/<int:team_id>/next5")
 def team_next5(team_id):
+    # NEW: auto-refresh matches occasionally (so schedules update after a search/team click)
+    try:
+        if is_stale("matches", hours=AUTO_REFRESH_HOURS):
+            do_refresh_epl()
+    except Exception:
+        # If refresh fails, still return whatever is in MongoDB (don’t break the page)
+        pass
+
     matches = list(matches_col.find(
         {
             "$and": [
@@ -127,11 +306,20 @@ def team_next5(team_id):
 
     return jsonify(matches)
 
-# This route combines the next 5 matches with the best odds and implied probabilities for the team. 
-# It first retrieves the next 5 matches, then for each match it tries to find the corresponding odds document 
-# by matching team names. If found, it calculates the best odds across bookmakers and converts them to implied probabilities.
+
+# This route combines the next 5 matches with the best odds and implied probabilities for the team.
 @app.route("/team/<int:team_id>/value_simple")
 def team_value_simple(team_id):
+
+    # auto-refresh matches + odds occasionally (best place to keep things fresh)
+    try:
+        if is_stale("matches", hours=AUTO_REFRESH_HOURS):
+            do_refresh_epl()
+        if is_stale("odds", hours=AUTO_REFRESH_HOURS):
+            do_refresh_odds()
+    except Exception:
+        # If refresh fails, continue using existing DB data
+        pass
 
     # Get next 5 upcoming matches from your matches collection
     next5 = list(matches_col.find(
@@ -154,10 +342,10 @@ def team_value_simple(team_id):
         home_strength = team_form_score(home_id)
         away_strength = team_form_score(away_id)
 
-        #converting difference into a probability 
+        # converting difference into a probability
         diff = home_strength - away_strength
-       
-        model_home_prob = 1 / (1+2.718 ** (-diff / 5) )
+
+        model_home_prob = 1 / (1 + 2.718 ** (-diff / 5))
         model_away_prob = 1 - model_home_prob
 
         home_name = norm_team(m["homeTeam"]["name"])
@@ -167,7 +355,7 @@ def team_value_simple(team_id):
             "homeTeamNorm": home_name,
             "awayTeamNorm": away_name
         }, {"_id": 0})
-       
+
         if not odds_doc:
             results.append({
                 "match": m,
@@ -228,153 +416,27 @@ def team_value_simple(team_id):
 # Admin route to refresh EPL matches and teams data from football-data API
 @app.route("/admin/refresh")
 def refresh_epl():
-    if not API_KEY:
-        return jsonify({"error": "Missing FOOTBALL_DATA_KEY in .env"}), 500
-    if not MONGO_URI:
-        return jsonify({"error": "Missing MONGO_URI in .env"}), 500
+    try:
+        out = do_refresh_epl()
+        return jsonify(out)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
-    headers = {"X-Auth-Token": API_KEY}
-    url = "https://api.football-data.org/v4/competitions/PL/matches"
-    r = requests.get(url, headers=headers)
-
-    if r.status_code != 200:
-        return jsonify({
-            "error": "football-data API request failed",
-            "status_code": r.status_code,
-            "details": r.text
-        }), r.status_code
-
-    data = r.json()
-    matches = data.get("matches", [])
-    season = data.get("filters", {}).get("season")
-
-    team_ops = []
-    match_ops = []
-
-    for m in matches:
-        home = m["homeTeam"]
-        away = m["awayTeam"]
-
-        # upsert teams
-        for t in (home, away):
-            team_ops.append(
-                UpdateOne(
-                    {"id": t["id"]},
-                    {"$set": {
-                        "id": t["id"],
-                        "name": t["name"],
-                        "shortName": t.get("shortName"),
-                        "tla": t.get("tla"),
-                        "crest": t.get("crest")
-                    }},
-                    upsert=True
-                )
-            )
-
-        # upsert match
-        match_doc = {
-            "id": m["id"],
-            "utcDate": m.get("utcDate"),
-            "status": m.get("status"),
-            "matchday": m.get("matchday"),
-            "season": season,
-            "homeTeam": {"id": home["id"], "name": home["name"]},
-            "awayTeam": {"id": away["id"], "name": away["name"]},
-            "score": m.get("score", {})
-        }
-
-        match_ops.append(
-            UpdateOne({"id": m["id"]}, {"$set": match_doc}, upsert=True)
-        )
-
-    if team_ops:
-        teams_col.bulk_write(team_ops, ordered=False)
-    if match_ops:
-        matches_col.bulk_write(match_ops, ordered=False)
-
-    return jsonify({
-        "ok": True,
-        "teams_upserted": len(team_ops),
-        "matches_upserted": len(match_ops)
-    })
 
 @app.route("/admin/refresh_odds")
 def refresh_odds():
-    if not ODDS_API_KEY:
-        return jsonify({"error": "Missing ODDS_API_KEY"}), 500
-
-    url = "https://api.the-odds-api.com/v4/sports/soccer_epl/odds"
-    params = {
-        "apiKey": ODDS_API_KEY,
-        "regions": "us",
-        "markets": "h2h",
-        "oddsFormat": "decimal",
-        "dateFormat": "iso"
-    }
-
-    r = requests.get(url, params=params)
-
-    if r.status_code != 200:
-        return jsonify({
-            "error": "Odds API failed",
-            "status": r.status_code,
-            "details": r.text
-        }), r.status_code
-
-    events = r.json()
-
-    ops = []
-    pulled_at = datetime.utcnow().isoformat() + "Z"
-
-    for e in events:
-        doc = {
-            "eventId": e.get("id"),
-            "commenceTime": e.get("commence_time"),
-            "homeTeam": e.get("home_team"),
-            "awayTeam": e.get("away_team"),
-            "homeTeamNorm": norm_team(e.get("home_team")),
-            "awayTeamNorm": norm_team(e.get("away_team")),
-            "bookmakers": [],
-            "pulledAt": pulled_at
-        }
-
-
-        for b in e.get("bookmakers", []):
-            for m in b.get("markets", []):
-                if m.get("key") == "h2h":
-                    outcomes = {o["name"]: o["price"] for o in m.get("outcomes", [])}
-                    doc["bookmakers"].append({
-                        "key": b.get("key"),
-                        "title": b.get("title"),
-                        "lastUpdate": b.get("last_update"),
-                        "h2h": {
-                            "home": outcomes.get(doc["homeTeam"]),
-                            "draw": outcomes.get("Draw"),
-                            "away": outcomes.get(doc["awayTeam"])
-                        }
-                    })
-
-        if doc["eventId"]:
-            ops.append(
-                UpdateOne({"eventId": doc["eventId"]}, {"$set": doc}, upsert=True)
-            )
-
-    if ops:
-        odds_col.bulk_write(ops, ordered=False)
-
-    return jsonify({
-        "ok": True,
-        "eventsStored": len(ops)
-    })
+    try:
+        out = do_refresh_odds()
+        return jsonify(out)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/debug/odds")
 def debug_odds():
-    sample = odds_col.find_one({},{"_id": 0})
+    sample = odds_col.find_one({}, {"_id": 0})
     return jsonify(sample)
 
+
 if __name__ == "__main__":
-    app.run(host ="0.0.0.0", port=5005, debug=True)
-
-
-
+    app.run(host="0.0.0.0", port=5005, debug=True)
