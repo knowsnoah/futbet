@@ -4,7 +4,8 @@ import requests
 from datetime import datetime, timedelta
 from pymongo import MongoClient, UpdateOne
 from dotenv import load_dotenv
-from math import exp  # (still here even if unused)
+import certifi
+
 
 app = Flask(__name__)
 
@@ -14,8 +15,7 @@ load_dotenv()
 MONGO_URI = os.getenv("MONGO_URI")
 API_KEY = os.getenv("FOOTBALL_DATA_KEY")
 ODDS_API_KEY = os.getenv("ODDS_API_KEY")
-
-client = MongoClient(MONGO_URI)
+client = MongoClient(MONGO_URI, tls=True, tlsCAFile=certifi.where())
 db = client["futbet"]
 teams_col = db["teams"]
 matches_col = db["matches"]
