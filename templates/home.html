@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FutBet - Home</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <div class="container">
+    <div class="hero">
+      <h1>FutBet</h1>
+      <p>Search for a Premier League team and explore matches and value bets.</p>
+    </div>
+
+    <div class="section">
+      <h2>Search for a Team</h2>
+      <form method="GET" action="/">
+        <input type="text" name="q" placeholder="Enter team name..." value="{{ query }}" class="search-input">
+        <button type="submit" class="search-button">Search</button>
+      </form>
+
+      {% if query %}
+        <div style="margin-top: 20px;">
+          <h3>Search Results</h3>
+          {% if search_results %}
+            {% for team in search_results %}
+              <a href="{{ url_for('team_page', team_id=team.id) }}" class="team-link">
+                {{ team.name }}
+              </a>
+            {% endfor %}
+          {% else %}
+            <p class="message">No teams found.</p>
+          {% endif %}
+        </div>
+      {% endif %}
+    </div>
+
+    <div class="section">
+      <h2>Upcoming Premier League Matches</h2>
+      {% if upcoming_matches %}
+        {% for match in upcoming_matches %}
+          <div class="match-card">
+            <div class="match-date">{{ match.utcDate[:10] }}</div>
+            <div class="match-title">{{ match.homeTeam.name }} vs {{ match.awayTeam.name }}</div>
+            <div class="match-meta">Status: {{ match.status }}</div>
+          </div>
+        {% endfor %}
+      {% else %}
+        <p class="message">No upcoming matches found.</p>
+      {% endif %}
+    </div>
+  </div>
+</body>
+</html>

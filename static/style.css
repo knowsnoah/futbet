@@ -207,3 +207,69 @@ body {
     width: 100%;
   }
 }
+
+.search-input {
+  width: 100%;
+  max-width: 500px;
+  padding: 14px 16px;
+  border: 1px solid #334155;
+  border-radius: 12px;
+  font-size: 1rem;
+  background: #0f172a;
+  color: white;
+  outline: none;
+  margin-right: 10px;
+  margin-bottom: 10px;
+}
+
+.search-button,
+.back-button {
+  display: inline-block;
+  padding: 12px 20px;
+  border: none;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #22c55e, #16a34a);
+  color: white;
+  text-decoration: none;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.team-link {
+  display: block;
+  padding: 14px 16px;
+  margin-top: 10px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  color: white;
+  text-decoration: none;
+  transition: 0.2s ease;
+}
+
+.team-link:hover {
+  background: rgba(56, 189, 248, 0.12);
+  border-color: rgba(56, 189, 248, 0.4);
+}
+
+.info-btn {
+  margin-left: 10px;
+  background: #38bdf8;
+  border: none;
+  color: #0f172a;
+  font-weight: bold;
+  border-radius: 50%;
+  width: 22px;
+  height: 22px;
+  cursor: pointer;
+}
+
+.info-box {
+  margin-top: 12px;
+  padding: 14px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.05);
+  color: #cbd5e1;
+  line-height: 1.5;
+  font-size: 0.9rem;
+}
