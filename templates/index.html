@@ -1,147 +1,41 @@
 <!DOCTYPE html>
-
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FutBet - Premier League Odds and Value Site</title>
-    <!-- this is the jquery url for javascript functions-->
-    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FutBet - Premier League Odds and Value Site</title>
 
+  <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
-
 <body>
-    <!-- Welcome Page for the website -->
-    <h1><em>Welcome to FutBet - Your Premier League Odds and Value Site</em></h1>
-    <p>Discover the best odds and value for Premier League matches with FutBet. Stay ahead of the game and make informed betting decisions.</p>
-  
-    <form id="searchForm">
-        <input type="text" id="searchInput" placeholder="Search for teams or matches..."/>
-        <button id="searchButton">Search</button>
-    </form>
+  <div class="container">
+    <div class="hero">
+      <h1><em>Welcome to FutBet</em></h1>
+      <p>
+        Your Premier League odds and value site. Search for teams, view recent and upcoming matches,
+        and spot potential value bets with a cleaner, more modern interface.
+      </p>
+    </div>
 
-    <div id="results"></div>
-    <div id="valueBets"></div>
-    
-<script>
-function renderMatches(title, matches) {
-  let html = `<h2 style="margin-top:20px;">${title}</h2>`;
+    <div class="search-card">
+      <form id="searchForm">
+        <input type="text" id="searchInput" placeholder="Search for teams or matches..." />
+        <button id="searchButton" type="submit">Search</button>
+      </form>
+    </div>
 
-  if (!matches || matches.length === 0) {
-    html += "<p>No matches found.</p>";
-    return html;
-  }
+    <div id="results" class="section">
+      <h2>Search Results</h2>
+      <p class="message">Search for a Premier League team to get started.</p>
+    </div>
 
-  matches.forEach(function(m) {
-    const ft = (m.score && m.score.fullTime) ? m.score.fullTime : {};
-    const score = (ft.home == null || ft.away == null) ? "TBD" : `${ft.home} - ${ft.away}`;
+    <div id="valueBets" class="section">
+      <h2>Value Bets</h2>
+      <p class="message">Upcoming value bet opportunities will appear here.</p>
+    </div>
+  </div>
 
-    const date = new Date(m.utcDate);
-    const formattedDate = date.toLocaleDateString();
-
-    html += `
-      <div style="margin-bottom:12px; padding:10px; border-bottom:1px solid #ccc;">
-        <div><strong>${formattedDate}</strong></div>
-        <div>${m.homeTeam.name} vs ${m.awayTeam.name} ${score !== "TBD" ? `| <strong>${score}</strong>` : ""}</div>
-        <div>Status: ${m.status}</div>
-      </div>
-    `;
-  });
-
-  return html;
-}
-
-$("#searchForm").submit(function(event) {
-  event.preventDefault();
-
-  const teamName = $("#searchInput").val().trim();
-  if (!teamName) {
-    $("#results").html("<p>Please enter a team name.</p>");
-    return;
-  }
-
-  $("#valueBets").html(""); // clear value bets when doing a new search
-
-  $.get("/search", { name: teamName }, function(teams) {
-    $("#results").html("");
-
-    if (teams.length === 0) {
-      $("#results").append("<p>No teams found.</p>");
-      return;
-    }
-
-    teams.forEach(function(team) {
-      $("#results").append(`
-        <div class="teamRow" data-teamid="${team.id}"
-             style="cursor:pointer; padding:6px; border-bottom:1px solid #444;">
-          <strong>${team.name}</strong>
-        </div>
-      `);
-    });
-  });
-});
-
-$(document).on("click", ".teamRow", function() {
-  const teamId = $(this).data("teamid");
-
-  $("#results").html("<p>Loading previous and upcoming matches...</p>");
-  $("#valueBets").html("<p>Loading value bets...</p>");
-
-  const last5Req = $.get(`/team/${teamId}/last5`);
-  const next5Req = $.get(`/team/${teamId}/next5`);
-  const valueReq = $.get(`/team/${teamId}/value_simple`);
-
-  $.when(last5Req, next5Req, valueReq).done(function(last5Res, next5Res, valueRes) {
-    const last5 = last5Res[0];
-    const next5 = next5Res[0];
-    const valueData = valueRes[0];
-
-    // Matches section
-    let html = "";
-    html += renderMatches("Previous 5 Matches (Played)", last5);
-    html += renderMatches("Next 5 Matches (Upcoming)", next5);
-    $("#results").html(html);
-
-    // Value Bets section
-    let vhtml = "<h2 style='margin-top:20px;'>Value Bets (Upcoming)</h2>";
-
-    if (!valueData || valueData.length === 0) {
-      vhtml += "<p>No value bet data found.</p>";
-      $("#valueBets").html(vhtml);
-      return;
-    }
-
-    valueData.forEach(item => {
-      if (!item.oddsFound) {
-        vhtml += `<p>No odds found for ${item.match.homeTeam.name} vs ${item.match.awayTeam.name}</p>`;
-        return;
-      }
-
-      const m = item.match;
-      const odds = item.bestOdds;
-      const prob = item.modelProb;
-      const val = item.value;
-
-      vhtml += `
-        <div style="margin-bottom:15px; border-bottom:1px solid #ccc; padding-bottom:10px;">
-          <strong>${m.homeTeam.name} vs ${m.awayTeam.name}</strong><br>
-          Odds (H/D/A): ${odds.home} / ${odds.draw} / ${odds.away}<br>
-          Model Prob (H/A): ${prob.home} / ${prob.away}<br>
-          Value (H/A): ${val.home} / ${val.away}
-        </div>
-      `;
-    });
-
-    $("#valueBets").html(vhtml);
-
-  }).fail(function() {
-    $("#results").html("<p>Error loading matches.</p>");
-    $("#valueBets").html("<p>Error loading value bets.</p>");
-  });
-});
-</script>
-
-
+  <script src="{{ url_for('static', filename='script.js') }}"></script>
 </body>
-
 </html>
