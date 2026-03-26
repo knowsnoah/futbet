@@ -7,116 +7,111 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
-  <div class="container">
-    <div class="hero">
+  <header class="top-nav">
+    <a href="{{ url_for('home') }}" class="nav-brand">Fut<span>Bet</span></a>
+    <nav>
+      <ul class="nav-menu">
+        <li><a href="{{ url_for('home') }}">Home</a></li>
+        <li><a href="#matches">Matches</a></li>
+        <li><a href="#value">Value Bets</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <main class="page-wrap">
+    <section class="hero">
       <h1>{{ team_name }}</h1>
       <p>Team match history, upcoming fixtures, and value bets.</p>
-      <a href="{{ url_for('home') }}" class="back-button">← Back to Home</a>
-    </div>
+      <a href="{{ url_for('home') }}" class="back-button">← Home</a>
+    </section>
 
-    <div class="section">
-      <h2>Previous 5 Matches</h2>
-      {% if last5 %}
-        {% for match in last5 %}
-          <div class="match-card">
-            <div class="match-date">{{ match.utcDate[:10] }}</div>
-            <div class="match-title">{{ match.homeTeam.name }} vs {{ match.awayTeam.name }}</div>
-            <div class="match-meta">
-              Score:
-              {{ match.score.fullTime.home if match.score.fullTime.home is not none else "TBD" }}
-              -
-              {{ match.score.fullTime.away if match.score.fullTime.away is not none else "TBD" }}
-            </div>
-          </div>
-        {% endfor %}
-      {% else %}
-        <p class="message">No previous matches found.</p>
-      {% endif %}
-    </div>
-
-    <div class="section">
-      <h2>Next 5 Matches</h2>
-      {% if next5 %}
-        {% for match in next5 %}
-          <div class="match-card">
-            <div class="match-date">{{ match.utcDate[:10] }}</div>
-            <div class="match-title">{{ match.homeTeam.name }} vs {{ match.awayTeam.name }}</div>
-            <div class="match-meta">Status: {{ match.status }}</div>
-          </div>
-        {% endfor %}
-      {% else %}
-        <p class="message">No upcoming matches found.</p>
-      {% endif %}
-    </div>
-
-    <div class="section">
-        <h2>Value Bets <button id="infoToggle" class="info-btn">?</button></h2>
-
-        <div id="infoBox" class="info-box" style="display: none;">
-            <p>
-            Odds show the bookmaker’s expected chances. Our model estimates the true probability based on recent team performance.
-            <br><br>
-            <strong>Value = (Probability × Odds) − 1</strong>
-            <br><br>
-            Positive value means the bet may be underpriced (good opportunity).
-            Negative value means it may be overpriced.
-            </p>
-        </div>
-      {% if value_bets %}
-        {% for item in value_bets %}
-          <div class="value-card">
-            <strong>{{ item.match.homeTeam.name }} vs {{ item.match.awayTeam.name }}</strong>
-
-            {% if item.oddsFound %}
-              <div class="value-grid">
-                <div class="stat-box">
-                  <div class="stat-label">Odds (H / D / A)</div>
-                  <div class="stat-value">
-                    {{ item.bestOdds.home }} / {{ item.bestOdds.draw }} / {{ item.bestOdds.away }}
-                  </div>
-                </div>
-
-                <div class="stat-box">
-                  <div class="stat-label">Model Prob (H / D / A)</div>
-                  <div class="stat-value">
-                    {{ item.modelProb.home }} / {{ item.modelProb.draw }} / {{ item.modelProb.away }}
-                  </div>
-                </div>
-
-                <div class="stat-box">
-                  <div class="stat-label">Value (H / D / A)</div>
-                  <div class="stat-value">
-                    {{ item.value.home }} / {{ item.value.draw }} / {{ item.value.away }}
-                  </div>
-                </div>
+    <div class="main-grid">
+      <div class="left-col">
+        <section class="section" id="matches">
+          <h2>Previous 5 Matches</h2>
+          {% if last5 %}
+            {% for match in last5 %}
+              <div class="match-card">
+                <div class="match-date">{{ match.utcDate[:10] }}</div>
+                <div class="match-title">{{ match.homeTeam.name }} vs {{ match.awayTeam.name }}</div>
+                <div class="match-meta">Score: {{ match.score.fullTime.home if match.score.fullTime.home is not none else "TBD" }} - {{ match.score.fullTime.away if match.score.fullTime.away is not none else "TBD" }}</div>
               </div>
-            {% else %}
-              <p class="message">No odds found for this match.</p>
-            {% endif %}
+            {% endfor %}
+          {% else %}
+            <p class="message">No previous matches found.</p>
+          {% endif %}
+        </section>
+
+        <section class="section">
+          <h2>Next 5 Matches</h2>
+          {% if next5 %}
+            {% for match in next5 %}
+              <div class="match-card">
+                <div class="match-date">{{ match.utcDate[:10] }}</div>
+                <div class="match-title">{{ match.homeTeam.name }} vs {{ match.awayTeam.name }}</div>
+                <div class="match-meta">Status: {{ match.status }}</div>
+              </div>
+            {% endfor %}
+          {% else %}
+            <p class="message">No upcoming matches found.</p>
+          {% endif %}
+        </section>
+      </div>
+
+      <aside class="right-col" id="value">
+        <section class="section">
+          <h2>Value Bets <button id="infoToggle" class="info-btn">?</button></h2>
+          <div id="infoBox" class="info-box" style="display:none;">
+            <p>
+              Odds show the bookmaker’s expected chance. Our model estimates the probability from recent form.<br><br>
+              <strong>Value = (Probability × Odds) − 1</strong><br>
+              Positive value may indicate an upside.
+            </p>
           </div>
-        {% endfor %}
-      {% else %}
-        <p class="message">No value bet data found.</p>
-      {% endif %}
+
+          {% if value_bets %}
+            {% for item in value_bets %}
+              <div class="value-card">
+                <strong>{{ item.match.homeTeam.name }} vs {{ item.match.awayTeam.name }}</strong>
+
+                {% if item.oddsFound %}
+                  <div class="value-grid">
+                    <div class="stat-box">
+                      <div class="stat-label">Odds (H / D / A)</div>
+                      <div class="stat-value">{{ item.bestOdds.home }} / {{ item.bestOdds.draw }} / {{ item.bestOdds.away }}</div>
+                    </div>
+                    <div class="stat-box">
+                      <div class="stat-label">Model Prob (H / D / A)</div>
+                      <div class="stat-value">{{ item.modelProb.home }} / {{ item.modelProb.draw }} / {{ item.modelProb.away }}</div>
+                    </div>
+                    <div class="stat-box">
+                      <div class="stat-label">Value (H / D / A)</div>
+                      <div class="stat-value">{{ item.value.home }} / {{ item.value.draw }} / {{ item.value.away }}</div>
+                    </div>
+                  </div>
+                {% else %}
+                  <p class="message">No odds found for this match.</p>
+                {% endif %}
+              </div>
+            {% endfor %}
+          {% else %}
+            <p class="message">No value bet data found.</p>
+          {% endif %}
+        </section>
+      </aside>
     </div>
-  </div>
-  
-<script>
-  document.addEventListener("DOMContentLoaded", function () {
-    const btn = document.getElementById("infoToggle");
-    const box = document.getElementById("infoBox");
+  </main>
 
-    if (btn && box) {
-      btn.addEventListener("click", function () {
-        if (box.style.display === "none") {
-          box.style.display = "block";
-        } else {
-          box.style.display = "none";
-        }
-      });
-    }
-  });
-</script>
-
+  <script>
+    document.addEventListener("DOMContentLoaded", function () {
+      const btn = document.getElementById("infoToggle");
+      const box = document.getElementById("infoBox");
+      if (btn && box) {
+        btn.addEventListener("click", function () {
+          box.style.display = box.style.display === "none" ? "block" : "none";
+        });
+      }
+    });
+  </script>
 </body>
 </html>

@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FutBet - Premier League Table</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <header class="top-nav">
+    <a href="{{ url_for('home') }}" class="nav-brand">Fut<span>Bet</span></a>
+    <nav>
+      <ul class="nav-menu">
+        <li><a href="{{ url_for('home') }}">Matches</a></li>
+        <li><a href="{{ url_for('table_page') }}">Table</a></li>
+        <li><a href="#">Statistics</a></li>
+        <li><a href="#">Fantasy</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <main class="page-wrap">
+    <section class="hero">
+      <h1>Premier League Table</h1>
+      <p>Latest standings fetched from football-data.org.</p>
+      <a href="{{ url_for('home') }}" class="back-button">← Back</a>
+    </section>
+
+    <section class="section">
+      <h2>Current Standings</h2>
+      {% if standings %}
+      <div class="table-wrapper">
+        <table class="standings-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Team</th>
+              <th>Pl</th>
+              <th>W</th>
+              <th>D</th>
+              <th>L</th>
+              <th>GF</th>
+              <th>GA</th>
+              <th>GD</th>
+              <th>Pts</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for team in standings %}
+            <tr>
+              <td>{{ team.position }}</td>
+              <td><a href="{{ url_for('team_page', team_id=team.team_id or 0) }}" class="team-link">{{ team.team_name }}</a></td>
+              <td>{{ team.playedGames }}</td>
+              <td>{{ team.won }}</td>
+              <td>{{ team.draw }}</td>
+              <td>{{ team.lost }}</td>
+              <td>{{ team.goalsFor }}</td>
+              <td>{{ team.goalsAgainst }}</td>
+              <td>{{ team.goalDifference }}</td>
+              <td>{{ team.points }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+        <p class="message">Standings are not available right now.</p>
+      {% endif %}
+    </section>
+  </main>
+</body>
+</html>

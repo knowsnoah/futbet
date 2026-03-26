@@ -115,6 +115,34 @@ def get_team_name(team_id):
     return "Team"
 
 
+def get_standings():
+    url = f"{FOOTBALL_API_BASE}/competitions/PL/standings"
+    data = safe_get_json(url, headers=football_headers)
+    standings = []
+
+    for table in data.get("standings", []):
+        if table.get("type") == "TOTAL":
+            for row in table.get("table", []):
+                team = row.get("team", {})
+                standings.append({
+                    "position": row.get("position"),
+                    "team_id": team.get("id"),
+                    "team_name": team.get("name"),
+                    "crest": team.get("crest") or "",
+                    "playedGames": row.get("playedGames"),
+                    "won": row.get("won"),
+                    "draw": row.get("draw"),
+                    "lost": row.get("lost"),
+                    "points": row.get("points"),
+                    "goalsFor": row.get("goalsFor"),
+                    "goalsAgainst": row.get("goalsAgainst"),
+                    "goalDifference": row.get("goalDifference"),
+                })
+            break
+
+    return standings
+
+
 # -------------------------
 # Simple model from recent form
 # -------------------------
@@ -345,6 +373,12 @@ def team_page(team_id):
         next5=next5,
         value_bets=value_bets
     )
+
+
+@app.route("/table")
+def table_page():
+    standings = get_standings()
+    return render_template("table.html", standings=standings)
 
 
 @app.route("/team/<int:team_id>/value_simple")

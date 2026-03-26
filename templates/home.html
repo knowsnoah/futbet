@@ -7,49 +7,89 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
-  <div class="container">
-    <div class="hero">
+  <header class="top-nav">
+    <a href="{{ url_for('home') }}" class="nav-brand">Fut<span>Bet</span></a>
+    <nav>
+      <ul class="nav-menu">
+        <li><a href="{{ url_for('home') }}">Matches</a></li>
+        <li><a href="{{ url_for('table_page') }}">Table</a></li>
+        <li><a href="#">Statistics</a></li>
+        <li><a href="#">Fantasy</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <main class="page-wrap">
+    <section class="hero">
       <h1>FutBet</h1>
-      <p>Search for a Premier League team and explore matches and value bets.</p>
-    </div>
+      <p>Find EPL fixtures, evaluate your favorite club, and spot value bets.</p>
+      <div class="spotlight">
+        <div class="spotlight-box">
+          <h3>Player of the Month</h3>
+          <p>March shortlist ready. Explore team form and predictions.</p>
+        </div>
+        <div class="spotlight-box">
+          <h3>Upcoming Highlights</h3>
+          <p>Live tracking of fixtures and odds updates for the top 20 matches.</p>
+        </div>
+      </div>
+    </section>
 
-    <div class="section">
-      <h2>Search for a Team</h2>
-      <form method="GET" action="/">
-        <input type="text" name="q" placeholder="Enter team name..." value="{{ query }}" class="search-input">
-        <button type="submit" class="search-button">Search</button>
-      </form>
+    <div class="main-grid">
+      <div class="left-col">
+        <section class="section">
+          <h2>Search for a Team</h2>
+          <form method="GET" action="/" id="searchForm">
+            <input type="text" name="q" id="searchInput" placeholder="Enter team name..." value="{{ query }}" class="search-input" />
+            <button type="submit" id="searchButton" class="search-button">Search</button>
+          </form>
 
-      {% if query %}
-        <div style="margin-top: 20px;">
-          <h3>Search Results</h3>
-          {% if search_results %}
-            {% for team in search_results %}
-              <a href="{{ url_for('team_page', team_id=team.id) }}" class="team-link">
-                {{ team.name }}
-              </a>
+          {% if query %}
+            <div class="search-results" style="margin-top: 20px;">
+              <h3>Search Results</h3>
+              {% if search_results %}
+                {% for team in search_results %}
+                  <a href="{{ url_for('team_page', team_id=team.id) }}" class="team-link">{{ team.name }}</a>
+                {% endfor %}
+              {% else %}
+                <p class="message">No teams found.</p>
+              {% endif %}
+            </div>
+          {% endif %}
+        </section>
+
+        <section class="section">
+          <h2>Upcoming Premier League Matches</h2>
+          {% if upcoming_matches %}
+            {% for match in upcoming_matches %}
+              <div class="match-card">
+                <div class="match-date">{{ match.utcDate[:10] }}</div>
+                <div class="match-title">{{ match.homeTeam.name }} vs {{ match.awayTeam.name }}</div>
+                <div class="match-meta">Status: {{ match.status }}</div>
+              </div>
             {% endfor %}
           {% else %}
-            <p class="message">No teams found.</p>
+            <p class="message">No upcoming matches found.</p>
           {% endif %}
-        </div>
-      {% endif %}
-    </div>
+        </section>
+      </div>
 
-    <div class="section">
-      <h2>Upcoming Premier League Matches</h2>
-      {% if upcoming_matches %}
-        {% for match in upcoming_matches %}
-          <div class="match-card">
-            <div class="match-date">{{ match.utcDate[:10] }}</div>
-            <div class="match-title">{{ match.homeTeam.name }} vs {{ match.awayTeam.name }}</div>
-            <div class="match-meta">Status: {{ match.status }}</div>
+      <aside class="right-col">
+        <section class="section notification-card">
+          <h2>Premier League Brief</h2>
+          <div class="notification-card">
+            <div class="notification-date">LIVE</div>
+            <div class="notification-title">Monday Transfers</div>
+            <div class="notification-text">Manager changes and injury updates across the division.</div>
           </div>
-        {% endfor %}
-      {% else %}
-        <p class="message">No upcoming matches found.</p>
-      {% endif %}
+          <div class="notification-card">
+            <div class="notification-date">TODAY</div>
+            <div class="notification-title">Top Value Picks</div>
+            <div class="notification-text">Check the latest value bet recommendations for your team.</div>
+          </div>
+        </section>
+      </aside>
     </div>
-  </div>
+  </main>
 </body>
 </html>
