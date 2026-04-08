@@ -28,6 +28,11 @@
 
     <section class="section">
       <h2>Current Standings</h2>
+      <div class="form-legend">
+        <span class="legend-item win">W = Win</span>
+        <span class="legend-item draw">D = Draw</span>
+        <span class="legend-item loss">L = Loss</span>
+      </div>
       {% if standings %}
       <div class="table-wrapper">
         <table class="standings-table">
@@ -43,6 +48,7 @@
               <th>GA</th>
               <th>GD</th>
               <th>Pts</th>
+              <th>Form</th>
             </tr>
           </thead>
           <tbody>
@@ -58,6 +64,11 @@
               <td>{{ team.goalsAgainst }}</td>
               <td>{{ team.goalDifference }}</td>
               <td>{{ team.points }}</td>
+              <td class="form-row">
+                {% for result in team.form %}
+                  <span class="form-badge {{ result|lower }}">{{ result }}</span>
+                {% endfor %}
+              </td>
             </tr>
             {% endfor %}
           </tbody>

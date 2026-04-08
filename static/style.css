@@ -277,6 +277,27 @@ body {
   font-weight: 800;
 }
 
+.good-value {
+  color: #4ade80;
+}
+
+.value-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 12px 0 8px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.value-badge.good {
+  color: #22c55e;
+  background: rgba(34, 197, 94, 0.16);
+  border: 1px solid rgba(34, 197, 94, 0.35);
+}
+
 .message {
   color: #cbd5e1;
   padding: 8px 0;
@@ -390,5 +411,73 @@ body {
 
 .standings-table td .team-link:hover {
   color: #ffffff;
+}
+
+.form-row {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.form-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 800;
+  color: #ffffff;
+}
+
+.form-badge.w {
+  background: #22c55e;
+}
+
+.form-badge.d {
+  background: #facc15;
+  color: #111827;
+}
+
+.form-badge.l {
+  background: #ef4444;
+}
+
+.form-legend {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  background: rgba(255, 255, 255, 0.08);
+  color: #f8fafc;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.legend-item.win {
+  background: rgba(34, 197, 94, 0.16);
+  border-color: rgba(34, 197, 94, 0.35);
+}
+
+.legend-item.draw {
+  background: rgba(250, 204, 21, 0.18);
+  border-color: rgba(250, 204, 21, 0.35);
+  color: #111827;
+}
+
+.legend-item.loss {
+  background: rgba(239, 68, 68, 0.16);
+  border-color: rgba(239, 68, 68, 0.35);
 }
 

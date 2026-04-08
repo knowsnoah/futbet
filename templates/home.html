@@ -13,8 +13,7 @@
       <ul class="nav-menu">
         <li><a href="{{ url_for('home') }}">Matches</a></li>
         <li><a href="{{ url_for('table_page') }}">Table</a></li>
-        <li><a href="#">Statistics</a></li>
-        <li><a href="#">Fantasy</a></li>
+        <li><a href="#">Combos</a></li> 
       </ul>
     </nav>
   </header>
@@ -34,6 +33,10 @@
         </div>
       </div>
     </section>
+
+    <div style="text-align: center; margin: 20px 0;">
+      <a href="{{ url_for('home', refresh='true') }}" class="search-button" style="text-decoration: none;">Refresh Data from APIs</a>
+    </div>
 
     <div class="main-grid">
       <div class="left-col">
@@ -76,17 +79,20 @@
 
       <aside class="right-col">
         <section class="section notification-card">
-          <h2>Premier League Brief</h2>
-          <div class="notification-card">
-            <div class="notification-date">LIVE</div>
-            <div class="notification-title">Monday Transfers</div>
-            <div class="notification-text">Manager changes and injury updates across the division.</div>
-          </div>
-          <div class="notification-card">
-            <div class="notification-date">TODAY</div>
-            <div class="notification-title">Top Value Picks</div>
-            <div class="notification-text">Check the latest value bet recommendations for your team.</div>
-          </div>
+          <h2>Value Picks</h2>
+          {% if value_picks %}
+            {% for pick in value_picks %}
+              <div class="notification-card">
+                <div class="notification-date">{{ pick.match.utcDate[:10] }}</div>
+                <div class="notification-title">{{ pick.match.homeTeam.name }} vs {{ pick.match.awayTeam.name }}</div>
+                <div class="notification-text">Bet on {{ pick.bet }}: Odds {{ pick.odds }}, Value {{ pick.value | round(3) }}</div>
+              </div>
+            {% endfor %}
+          {% else %}
+            <div class="notification-card">
+              <div class="notification-text">No value picks available at the moment.</div>
+            </div>
+          {% endif %}
         </section>
       </aside>
     </div>

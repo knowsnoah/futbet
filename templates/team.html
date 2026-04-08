@@ -25,6 +25,10 @@
       <a href="{{ url_for('home') }}" class="back-button">← Home</a>
     </section>
 
+    <div style="text-align: center; margin: 20px 0;">
+      <a href="{{ url_for('team_page', team_id=team_id, refresh='true') }}" class="search-button" style="text-decoration: none;">Refresh Data from APIs</a>
+    </div>
+
     <div class="main-grid">
       <div class="left-col">
         <section class="section" id="matches">
@@ -74,19 +78,38 @@
               <div class="value-card">
                 <strong>{{ item.match.homeTeam.name }} vs {{ item.match.awayTeam.name }}</strong>
 
+                {% set home_good = item.value.home is not none and item.value.home > 1.0 %}
+                {% set draw_good = item.value.draw is not none and item.value.draw > 1.0 %}
+                {% set away_good = item.value.away is not none and item.value.away > 1.0 %}
+
                 {% if item.oddsFound %}
+                  {% if home_good or draw_good or away_good %}
+                    <div class="value-badge good">Good value bet</div>
+                  {% endif %}
                   <div class="value-grid">
                     <div class="stat-box">
                       <div class="stat-label">Odds (H / D / A)</div>
-                      <div class="stat-value">{{ item.bestOdds.home }} / {{ item.bestOdds.draw }} / {{ item.bestOdds.away }}</div>
+                      <div class="stat-value">
+                        <span class="{{ 'good-value' if home_good else '' }}">{{ item.bestOdds.home }}</span> /
+                        <span class="{{ 'good-value' if draw_good else '' }}">{{ item.bestOdds.draw }}</span> /
+                        <span class="{{ 'good-value' if away_good else '' }}">{{ item.bestOdds.away }}</span>
+                      </div>
                     </div>
                     <div class="stat-box">
                       <div class="stat-label">Model Prob (H / D / A)</div>
-                      <div class="stat-value">{{ item.modelProb.home }} / {{ item.modelProb.draw }} / {{ item.modelProb.away }}</div>
+                      <div class="stat-value">
+                        <span class="{{ 'good-value' if home_good else '' }}">{{ item.modelProb.home }}</span> /
+                        <span class="{{ 'good-value' if draw_good else '' }}">{{ item.modelProb.draw }}</span> /
+                        <span class="{{ 'good-value' if away_good else '' }}">{{ item.modelProb.away }}</span>
+                      </div>
                     </div>
                     <div class="stat-box">
                       <div class="stat-label">Value (H / D / A)</div>
-                      <div class="stat-value">{{ item.value.home }} / {{ item.value.draw }} / {{ item.value.away }}</div>
+                      <div class="stat-value">
+                        <span class="{{ 'good-value' if home_good else '' }}">{{ item.value.home }}</span> /
+                        <span class="{{ 'good-value' if draw_good else '' }}">{{ item.value.draw }}</span> /
+                        <span class="{{ 'good-value' if away_good else '' }}">{{ item.value.away }}</span>
+                      </div>
                     </div>
                   </div>
                 {% else %}
@@ -94,6 +117,10 @@
                 {% endif %}
               </div>
             {% endfor %}
+          {% elif not odds_enabled %}
+            <p class="message">No value bet data available because the Odds API key is not configured.</p>
+          {% elif next5 %}
+            <p class="message">Upcoming matches are available, but value bet calculations could not be completed right now.</p>
           {% else %}
             <p class="message">No value bet data found.</p>
           {% endif %}

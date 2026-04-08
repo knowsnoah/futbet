@@ -3,6 +3,7 @@ import requests
 from dotenv import load_dotenv
 import os
 from datetime import datetime, timezone
+import mongoDB
 
 app = Flask(__name__)
 load_dotenv()
@@ -14,6 +15,20 @@ ODDS_API_KEY = os.getenv("ODDS_API_KEY")
 football_headers = {
     "X-Auth-Token": FOOTBALL_DATA_KEY
 }
+
+# MongoDB setup
+if mongoDB.client:
+    db = mongoDB.client.futbet
+    teams_collection = db.teams
+    matches_collection = db.matches
+    odds_collection = db.odds
+    mongodb_available = True
+else:
+    db = None
+    teams_collection = None
+    matches_collection = None
+    odds_collection = None
+    mongodb_available = False
 
 
 # -------------------------
@@ -27,6 +42,49 @@ def safe_get_json(url, headers=None, params=None):
     except requests.RequestException as e:
         print(f"Request failed for {url}: {e}")
         return {}
+
+
+def is_data_stale(cached_doc, max_age_hours=1):
+    """Check if cached data is older than max_age_hours"""
+    if not cached_doc or 'cached_at' not in cached_doc:
+        return True
+    cached_time = cached_doc['cached_at']
+    if isinstance(cached_time, str):
+        cached_time = datetime.fromisoformat(cached_time.replace('Z', '+00:00'))
+    age = datetime.now(timezone.utc) - cached_time
+    return age.total_seconds() > (max_age_hours * 3600)
+
+
+def cache_data(collection, key, data, max_age_hours=1):
+    """Cache data with timestamp"""
+    if not mongodb_available or not collection:
+        return data  # Just return data without caching
+        
+    doc = {
+        '_id': key,
+        'data': data,
+        'cached_at': datetime.now(timezone.utc)
+    }
+    collection.replace_one({'_id': key}, doc, upsert=True)
+    return data
+
+
+def get_cached_data(collection, key, fetch_func, max_age_hours=1, force_refresh=False):
+    """Get data from cache or fetch and cache"""
+    if not mongodb_available or not collection:
+        # Fall back to direct API calls if MongoDB is unavailable
+        return fetch_func()
+        
+    if not force_refresh:
+        cached = collection.find_one({'_id': key})
+        if cached and not is_data_stale(cached, max_age_hours):
+            return cached['data']
+    
+    # Fetch fresh data
+    data = fetch_func()
+    if data:
+        cache_data(collection, key, data, max_age_hours)
+    return data
 
 
 def parse_iso_datetime(dt_str):
@@ -73,10 +131,13 @@ def normalize_team_name(name):
 # -------------------------
 # football-data.org
 # -------------------------
-def get_pl_teams():
-    url = f"{FOOTBALL_API_BASE}/competitions/PL/teams"
-    data = safe_get_json(url, headers=football_headers)
-    return data.get("teams", [])
+def get_pl_teams(force_refresh=False):
+    def fetch_teams():
+        url = f"{FOOTBALL_API_BASE}/competitions/PL/teams"
+        data = safe_get_json(url, headers=football_headers)
+        return data.get("teams", [])
+    
+    return get_cached_data(teams_collection, 'pl_teams', fetch_teams, max_age_hours=24, force_refresh=force_refresh)
 
 
 def search_teams_by_name(name):
@@ -85,26 +146,70 @@ def search_teams_by_name(name):
     return [team for team in teams if name in team["name"].lower()]
 
 
-def get_upcoming_league_matches():
-    url = f"{FOOTBALL_API_BASE}/competitions/PL/matches"
-    params = {"status": "SCHEDULED"}
-    data = safe_get_json(url, headers=football_headers, params=params)
-    return data.get("matches", [])[:20]
+def is_premier_league_match(match):
+    competition = match.get("competition", {})
+    code = competition.get("code")
+    comp_id = competition.get("id")
+    return code == "PL" or comp_id == 2021
 
 
-def get_last5(team_id):
-    url = f"{FOOTBALL_API_BASE}/teams/{team_id}/matches"
-    params = {"status": "FINISHED", "limit": 5}
-    data = safe_get_json(url, headers=football_headers, params=params)
-    matches = data.get("matches", [])
-    return matches[-5:] if len(matches) > 5 else matches
+def get_upcoming_league_matches(force_refresh=False):
+    def fetch_matches():
+        url = f"{FOOTBALL_API_BASE}/competitions/PL/matches"
+        params = {"status": "SCHEDULED"}
+        data = safe_get_json(url, headers=football_headers, params=params)
+        return data.get("matches", [])[:20]
+    
+    return get_cached_data(matches_collection, 'upcoming_matches', fetch_matches, max_age_hours=1, force_refresh=force_refresh)
 
 
-def get_next5(team_id):
-    url = f"{FOOTBALL_API_BASE}/teams/{team_id}/matches"
-    params = {"status": "SCHEDULED", "limit": 5}
-    data = safe_get_json(url, headers=football_headers, params=params)
-    return data.get("matches", [])[:5]
+def get_last5(team_id, force_refresh=False):
+    def fetch_last5():
+        url = f"{FOOTBALL_API_BASE}/teams/{team_id}/matches"
+        params = {"status": "FINISHED", "limit": 20}
+        data = safe_get_json(url, headers=football_headers, params=params)
+        matches = [m for m in data.get("matches", []) if is_premier_league_match(m)]
+        return matches[-5:] if len(matches) > 5 else matches
+    
+    return get_cached_data(matches_collection, f'last5_{team_id}', fetch_last5, max_age_hours=6, force_refresh=force_refresh)
+
+
+def get_next5(team_id, force_refresh=False):
+    def fetch_next5():
+        url = f"{FOOTBALL_API_BASE}/teams/{team_id}/matches"
+        params = {"status": "SCHEDULED", "limit": 20}
+        data = safe_get_json(url, headers=football_headers, params=params)
+        matches = [m for m in data.get("matches", []) if is_premier_league_match(m)]
+        return matches[:5]
+    
+    return get_cached_data(matches_collection, f'next5_{team_id}', fetch_next5, max_age_hours=1, force_refresh=force_refresh)
+
+
+def get_form_results(team_id, limit=5, force_refresh=False):
+    matches = get_last5(team_id, force_refresh=force_refresh)
+    results = []
+
+    for match in matches:
+        ft = match.get("score", {}).get("fullTime", {})
+        home_goals = ft.get("home")
+        away_goals = ft.get("away")
+        if home_goals is None or away_goals is None:
+            continue
+
+        is_home = match.get("homeTeam", {}).get("id") == team_id
+        if is_home:
+            gf, ga = home_goals, away_goals
+        else:
+            gf, ga = away_goals, home_goals
+
+        if gf > ga:
+            results.append("W")
+        elif gf == ga:
+            results.append("D")
+        else:
+            results.append("L")
+
+    return list(reversed(results))
 
 
 def get_team_name(team_id):
@@ -115,7 +220,7 @@ def get_team_name(team_id):
     return "Team"
 
 
-def get_standings():
+def get_standings(force_refresh=False):
     url = f"{FOOTBALL_API_BASE}/competitions/PL/standings"
     data = safe_get_json(url, headers=football_headers)
     standings = []
@@ -124,9 +229,10 @@ def get_standings():
         if table.get("type") == "TOTAL":
             for row in table.get("table", []):
                 team = row.get("team", {})
+                team_id = team.get("id")
                 standings.append({
                     "position": row.get("position"),
-                    "team_id": team.get("id"),
+                    "team_id": team_id,
                     "team_name": team.get("name"),
                     "crest": team.get("crest") or "",
                     "playedGames": row.get("playedGames"),
@@ -137,6 +243,7 @@ def get_standings():
                     "goalsFor": row.get("goalsFor"),
                     "goalsAgainst": row.get("goalsAgainst"),
                     "goalDifference": row.get("goalDifference"),
+                    "form": get_form_results(team_id, force_refresh=force_refresh)
                 })
             break
 
@@ -148,15 +255,15 @@ def get_standings():
 # -------------------------
 def get_recent_form_points(team_id, limit=5):
     url = f"{FOOTBALL_API_BASE}/teams/{team_id}/matches"
-    params = {"status": "FINISHED", "limit": limit}
+    params = {"status": "FINISHED", "limit": 20}
     data = safe_get_json(url, headers=football_headers, params=params)
-    matches = data.get("matches", [])
+    matches = [m for m in data.get("matches", []) if is_premier_league_match(m)]
 
     points = 0
     goal_diff = 0
     count = 0
 
-    for m in matches:
+    for m in matches[:limit]:
         ft = m.get("score", {}).get("fullTime", {})
         home_goals = ft.get("home")
         away_goals = ft.get("away")
@@ -228,23 +335,26 @@ def estimate_match_probabilities(home_team_id, away_team_id):
 # -------------------------
 # The Odds API
 # -------------------------
-def get_epl_odds():
-    if not ODDS_API_KEY:
-        print("ODDS_API_KEY not set. Odds will be unavailable.")
+def get_epl_odds(force_refresh=False):
+    def fetch_odds():
+        if not ODDS_API_KEY:
+            print("ODDS_API_KEY not set. Odds will be unavailable.")
+            return []
+
+        url = "https://api.the-odds-api.com/v4/sports/soccer_epl/odds"
+        params = {
+            "apiKey": ODDS_API_KEY,
+            "regions": "uk,eu",
+            "markets": "h2h",
+            "oddsFormat": "decimal"
+        }
+
+        data = safe_get_json(url, params=params)
+        if isinstance(data, list):
+            return data
         return []
-
-    url = "https://api.the-odds-api.com/v4/sports/soccer_epl/odds"
-    params = {
-        "apiKey": ODDS_API_KEY,
-        "regions": "uk,eu",
-        "markets": "h2h",
-        "oddsFormat": "decimal"
-    }
-
-    data = safe_get_json(url, params=params)
-    if isinstance(data, list):
-        return data
-    return []
+    
+    return get_cached_data(odds_collection, 'epl_odds', fetch_odds, max_age_hours=0.5, force_refresh=force_refresh)
 
 
 def get_best_h2h_odds_for_match(match, odds_events):
@@ -312,9 +422,9 @@ def calc_value(prob, odds):
     return round((prob * odds) - 1, 3)
 
 
-def get_value_simple(team_id):
-    next5 = get_next5(team_id)
-    odds_events = get_epl_odds()
+def get_value_simple(team_id, force_refresh=False):
+    next5 = get_next5(team_id, force_refresh=force_refresh)
+    odds_events = get_epl_odds(force_refresh=force_refresh)
     results = []
 
     for match in next5:
@@ -341,29 +451,86 @@ def get_value_simple(team_id):
     return results
 
 
+def get_global_value_picks(limit=5, force_refresh=False):
+    upcoming_matches = get_upcoming_league_matches(force_refresh=force_refresh)
+    odds_events = get_epl_odds(force_refresh=force_refresh)
+    all_values = []
+
+    for match in upcoming_matches:
+        home_team = match.get("homeTeam", {})
+        away_team = match.get("awayTeam", {})
+
+        probs = estimate_match_probabilities(home_team.get("id"), away_team.get("id"))
+        odds_found, best_odds = get_best_h2h_odds_for_match(match, odds_events)
+
+        if not odds_found:
+            continue
+
+        value_home = calc_value(probs["home"], best_odds["home"])
+        value_draw = calc_value(probs["draw"], best_odds["draw"])
+        value_away = calc_value(probs["away"], best_odds["away"])
+
+        # Collect positive values
+        if value_home and value_home > 0:
+            all_values.append({
+                "match": match,
+                "bet": "home",
+                "value": value_home,
+                "odds": best_odds["home"],
+                "prob": probs["home"]
+            })
+        if value_draw and value_draw > 0:
+            all_values.append({
+                "match": match,
+                "bet": "draw",
+                "value": value_draw,
+                "odds": best_odds["draw"],
+                "prob": probs["draw"]
+            })
+        if value_away and value_away > 0:
+            all_values.append({
+                "match": match,
+                "bet": "away",
+                "value": value_away,
+                "odds": best_odds["away"],
+                "prob": probs["away"]
+            })
+
+    # Sort by value descending and take top limit
+    all_values.sort(key=lambda x: x["value"], reverse=True)
+    return all_values[:limit]
+
+
 # -------------------------
 # Routes
 # -------------------------
 @app.route("/", methods=["GET"])
 def home():
     query = request.args.get("q", "").strip()
+    refresh = request.args.get("refresh", "").lower() in ['true', '1', 'yes']
+    
     search_results = search_teams_by_name(query) if query else []
-    upcoming_matches = get_upcoming_league_matches()
+    upcoming_matches = get_upcoming_league_matches(force_refresh=refresh)
+    value_picks = get_global_value_picks(force_refresh=refresh) if ODDS_API_KEY else []
 
     return render_template(
         "home.html",
         query=query,
         search_results=search_results,
-        upcoming_matches=upcoming_matches
+        upcoming_matches=upcoming_matches,
+        value_picks=value_picks
     )
 
 
 @app.route("/team/<int:team_id>")
 def team_page(team_id):
+    refresh = request.args.get("refresh", "").lower() in ['true', '1', 'yes']
+    
     team_name = get_team_name(team_id)
-    last5 = get_last5(team_id)
-    next5 = get_next5(team_id)
-    value_bets = get_value_simple(team_id)
+    last5 = get_last5(team_id, force_refresh=refresh)
+    next5 = get_next5(team_id, force_refresh=refresh)
+    value_bets = get_value_simple(team_id, force_refresh=refresh)
+    odds_enabled = bool(ODDS_API_KEY)
 
     return render_template(
         "team.html",
@@ -371,13 +538,15 @@ def team_page(team_id):
         team_id=team_id,
         last5=last5,
         next5=next5,
-        value_bets=value_bets
+        value_bets=value_bets,
+        odds_enabled=odds_enabled
     )
 
 
 @app.route("/table")
 def table_page():
-    standings = get_standings()
+    refresh = request.args.get("refresh", "").lower() in ['true', '1', 'yes']
+    standings = get_standings(force_refresh=refresh)
     return render_template("table.html", standings=standings)
 
 
