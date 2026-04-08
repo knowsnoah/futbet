@@ -45,12 +45,19 @@ def safe_get_json(url, headers=None, params=None):
 
 
 def is_data_stale(cached_doc, max_age_hours=1):
-    """Check if cached data is older than max_age_hours"""
     if not cached_doc or 'cached_at' not in cached_doc:
         return True
+
     cached_time = cached_doc['cached_at']
+
     if isinstance(cached_time, str):
         cached_time = datetime.fromisoformat(cached_time.replace('Z', '+00:00'))
+
+    if cached_time.tzinfo is None:
+        cached_time = cached_time.replace(tzinfo=timezone.utc)
+    else:
+        cached_time = cached_time.astimezone(timezone.utc)
+
     age = datetime.now(timezone.utc) - cached_time
     return age.total_seconds() > (max_age_hours * 3600)
 
