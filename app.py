@@ -82,12 +82,19 @@ def get_cached_data(collection, key, fetch_func, max_age_hours=1, force_refresh=
         # Fall back to direct API calls if MongoDB is unavailable
         return fetch_func()
         
-    if not force_refresh:
-        cached = collection.find_one({'_id': key})
-        if cached and not is_data_stale(cached, max_age_hours):
-            return cached['data']
+    if force_refresh:
+        # Only fetch fresh data when explicitly requested
+        data = fetch_func()
+        if data:
+            cache_data(collection, key, data, max_age_hours)
+        return data
     
-    # Fetch fresh data
+    # Always use cached data if available, regardless of age
+    cached = collection.find_one({'_id': key})
+    if cached:
+        return cached['data']
+    
+    # No cached data, fetch and cache
     data = fetch_func()
     if data:
         cache_data(collection, key, data, max_age_hours)
@@ -167,7 +174,7 @@ def get_upcoming_league_matches(force_refresh=False):
         data = safe_get_json(url, headers=football_headers, params=params)
         return data.get("matches", [])[:20]
     
-    return get_cached_data(matches_collection, 'upcoming_matches', fetch_matches, max_age_hours=1, force_refresh=force_refresh)
+    return get_cached_data(matches_collection, 'upcoming_matches', fetch_matches, max_age_hours=24, force_refresh=force_refresh)
 
 
 def get_last5(team_id, force_refresh=False):
@@ -178,7 +185,7 @@ def get_last5(team_id, force_refresh=False):
         matches = [m for m in data.get("matches", []) if is_premier_league_match(m)]
         return matches[-5:] if len(matches) > 5 else matches
     
-    return get_cached_data(matches_collection, f'last5_{team_id}', fetch_last5, max_age_hours=6, force_refresh=force_refresh)
+    return get_cached_data(matches_collection, f'last5_{team_id}', fetch_last5, max_age_hours=24, force_refresh=force_refresh)
 
 
 def get_next5(team_id, force_refresh=False):
@@ -189,7 +196,7 @@ def get_next5(team_id, force_refresh=False):
         matches = [m for m in data.get("matches", []) if is_premier_league_match(m)]
         return matches[:5]
     
-    return get_cached_data(matches_collection, f'next5_{team_id}', fetch_next5, max_age_hours=1, force_refresh=force_refresh)
+    return get_cached_data(matches_collection, f'next5_{team_id}', fetch_next5, max_age_hours=24, force_refresh=force_refresh)
 
 
 def get_form_results(team_id, limit=5, force_refresh=False):
@@ -228,82 +235,88 @@ def get_team_name(team_id):
 
 
 def get_standings(force_refresh=False):
-    url = f"{FOOTBALL_API_BASE}/competitions/PL/standings"
-    data = safe_get_json(url, headers=football_headers)
-    standings = []
+    def fetch_standings():
+        url = f"{FOOTBALL_API_BASE}/competitions/PL/standings"
+        data = safe_get_json(url, headers=football_headers)
+        standings = []
 
-    for table in data.get("standings", []):
-        if table.get("type") == "TOTAL":
-            for row in table.get("table", []):
-                team = row.get("team", {})
-                team_id = team.get("id")
-                standings.append({
-                    "position": row.get("position"),
-                    "team_id": team_id,
-                    "team_name": team.get("name"),
-                    "crest": team.get("crest") or "",
-                    "playedGames": row.get("playedGames"),
-                    "won": row.get("won"),
-                    "draw": row.get("draw"),
-                    "lost": row.get("lost"),
-                    "points": row.get("points"),
-                    "goalsFor": row.get("goalsFor"),
-                    "goalsAgainst": row.get("goalsAgainst"),
-                    "goalDifference": row.get("goalDifference"),
-                    "form": get_form_results(team_id, force_refresh=force_refresh)
-                })
-            break
+        for table in data.get("standings", []):
+            if table.get("type") == "TOTAL":
+                for row in table.get("table", []):
+                    team = row.get("team", {})
+                    team_id = team.get("id")
+                    standings.append({
+                        "position": row.get("position"),
+                        "team_id": team_id,
+                        "team_name": team.get("name"),
+                        "crest": team.get("crest") or "",
+                        "playedGames": row.get("playedGames"),
+                        "won": row.get("won"),
+                        "draw": row.get("draw"),
+                        "lost": row.get("lost"),
+                        "points": row.get("points"),
+                        "goalsFor": row.get("goalsFor"),
+                        "goalsAgainst": row.get("goalsAgainst"),
+                        "goalDifference": row.get("goalDifference"),
+                        "form": get_form_results(team_id, force_refresh=force_refresh)
+                    })
+                break
 
-    return standings
+        return standings
+    
+    return get_cached_data(teams_collection, 'standings', fetch_standings, max_age_hours=168, force_refresh=force_refresh)  # Cache for 1 week
 
 
 # -------------------------
 # Simple model from recent form
 # -------------------------
 def get_recent_form_points(team_id, limit=5):
-    url = f"{FOOTBALL_API_BASE}/teams/{team_id}/matches"
-    params = {"status": "FINISHED", "limit": 20}
-    data = safe_get_json(url, headers=football_headers, params=params)
-    matches = [m for m in data.get("matches", []) if is_premier_league_match(m)]
+    def fetch_recent_form():
+        url = f"{FOOTBALL_API_BASE}/teams/{team_id}/matches"
+        params = {"status": "FINISHED", "limit": 20}
+        data = safe_get_json(url, headers=football_headers, params=params)
+        matches = [m for m in data.get("matches", []) if is_premier_league_match(m)]
 
-    points = 0
-    goal_diff = 0
-    count = 0
+        points = 0
+        goal_diff = 0
+        count = 0
 
-    for m in matches[:limit]:
-        ft = m.get("score", {}).get("fullTime", {})
-        home_goals = ft.get("home")
-        away_goals = ft.get("away")
+        for m in matches[:limit]:
+            ft = m.get("score", {}).get("fullTime", {})
+            home_goals = ft.get("home")
+            away_goals = ft.get("away")
 
-        if home_goals is None or away_goals is None:
-            continue
+            if home_goals is None or away_goals is None:
+                continue
 
-        is_home = m.get("homeTeam", {}).get("id") == team_id
+            is_home = m.get("homeTeam", {}).get("id") == team_id
 
-        if is_home:
-            gf, ga = home_goals, away_goals
-        else:
-            gf, ga = away_goals, home_goals
+            if is_home:
+                gf, ga = home_goals, away_goals
+            else:
+                gf, ga = away_goals, home_goals
 
-        goal_diff += (gf - ga)
+            goal_diff += (gf - ga)
 
-        if gf > ga:
-            points += 3
-        elif gf == ga:
-            points += 1
+            if gf > ga:
+                points += 3
+            elif gf == ga:
+                points += 1
 
-        count += 1
+            count += 1
 
-    if count == 0:
+        if count == 0:
+            return {
+                "ppg": 1.0,
+                "gd_per_match": 0.0
+            }
+
         return {
-            "ppg": 1.0,
-            "gd_per_match": 0.0
+            "ppg": round(points / count, 3),
+            "gd_per_match": round(goal_diff / count, 3)
         }
-
-    return {
-        "ppg": round(points / count, 3),
-        "gd_per_match": round(goal_diff / count, 3)
-    }
+    
+    return get_cached_data(matches_collection, f'recent_form_{team_id}_{limit}', fetch_recent_form, max_age_hours=24, force_refresh=False)  # Cache for 24 hours, don't auto-refresh
 
 
 def estimate_match_probabilities(home_team_id, away_team_id):
@@ -361,7 +374,7 @@ def get_epl_odds(force_refresh=False):
             return data
         return []
     
-    return get_cached_data(odds_collection, 'epl_odds', fetch_odds, max_age_hours=0.5, force_refresh=force_refresh)
+    return get_cached_data(odds_collection, 'epl_odds', fetch_odds, max_age_hours=6, force_refresh=force_refresh)
 
 
 def get_best_h2h_odds_for_match(match, odds_events):
@@ -555,6 +568,13 @@ def table_page():
     refresh = request.args.get("refresh", "").lower() in ['true', '1', 'yes']
     standings = get_standings(force_refresh=refresh)
     return render_template("table.html", standings=standings)
+
+
+@app.route("/combos")
+def combos_page():
+    refresh = request.args.get("refresh", "").lower() in ['true', '1', 'yes']
+    value_picks = get_global_value_picks(force_refresh=refresh) if ODDS_API_KEY else []
+    return render_template("combos.html", value_picks=value_picks, odds_enabled=bool(ODDS_API_KEY))
 
 
 @app.route("/team/<int:team_id>/value_simple")

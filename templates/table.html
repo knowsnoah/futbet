@@ -13,17 +13,15 @@
       <ul class="nav-menu">
         <li><a href="{{ url_for('home') }}">Matches</a></li>
         <li><a href="{{ url_for('table_page') }}">Table</a></li>
-        <li><a href="#">Combos</a></li>
-      </ul>
-    </nav>
-  </header>
-
-  <main class="page-wrap">
-    <section class="hero">
+        <li><a href="{{ url_for('combos_page') }}">Combos</a></li>
       <h1>Premier League Table</h1>
       <p>Latest standings fetched from football-data.org.</p>
       <a href="{{ url_for('home') }}" class="back-button">← Back</a>
     </section>
+
+    <div style="text-align: center; margin: 20px 0;">
+      <a href="{{ url_for('table_page', refresh='true') }}" class="search-button" style="text-decoration: none;">Refresh Stats</a>
+    </div>
 
     <section class="section">
       <h2>Current Standings</h2>

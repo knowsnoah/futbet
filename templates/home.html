@@ -13,7 +13,7 @@
       <ul class="nav-menu">
         <li><a href="{{ url_for('home') }}">Matches</a></li>
         <li><a href="{{ url_for('table_page') }}">Table</a></li>
-        <li><a href="#">Combos</a></li> 
+        <li><a href="{{ url_for('combos_page') }}">Combos</a></li>
       </ul>
     </nav>
   </header>
@@ -35,7 +35,7 @@
     </section>
 
     <div style="text-align: center; margin: 20px 0;">
-      <a href="{{ url_for('home', refresh='true') }}" class="search-button" style="text-decoration: none;">Refresh Data</a>
+      <a href="{{ url_for('home', refresh='true') }}" class="search-button" style="text-decoration: none;">Refresh Stats</a>
     </div>
 
     <div class="main-grid">

@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FutBet - Combos</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <header class="top-nav">
+    <a href="{{ url_for('home') }}" class="nav-brand">Fut<span>Bet</span></a>
+    <nav>
+      <ul class="nav-menu">
+        <li><a href="{{ url_for('home') }}">Matches</a></li>
+        <li><a href="{{ url_for('table_page') }}">Table</a></li>
+        <li><a href="{{ url_for('combos_page') }}">Combos</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <main class="page-wrap">
+    <section class="hero">
+      <h1>Combo Builder</h1>
+      <p>Select value picks and combine their odds into a single parlay-style ticket.</p>
+      <a href="{{ url_for('home') }}" class="back-button">← Home</a>
+    </section>
+
+    <div style="text-align: center; margin: 20px 0;">
+      <a href="{{ url_for('combos_page', refresh='true') }}" class="search-button" style="text-decoration: none;">Refresh Stats</a>
+    </div>
+
+    <section class="section">
+      <h2>Available Value Picks</h2>
+      {% if value_picks %}
+        <p>Select two or more picks to see combined odds, probability, and model value.</p>
+
+        <div class="combo-grid">
+          {% for pick in value_picks %}
+            <label class="combo-card">
+              <input type="checkbox" class="combo-checkbox" data-odds="{{ pick.odds }}" data-prob="{{ pick.prob }}" id="pick_{{ loop.index }}">
+              <div class="combo-card-content">
+                <div class="combo-fixture">{{ pick.match.homeTeam.name }} vs {{ pick.match.awayTeam.name }}</div>
+                <div class="combo-market">{{ pick.bet | capitalize }}</div>
+                <div class="combo-stats">
+                  <div class="combo-stat"><span>Odds</span><strong>{{ pick.odds }}</strong></div>
+                  <div class="combo-stat"><span>Model Prob</span><strong>{{ pick.prob }}</strong></div>
+                  <div class="combo-stat"><span>Value</span><strong>{{ pick.value | round(3) }}</strong></div>
+                </div>
+              </div>
+            </label>
+          {% endfor %}
+        </div>
+
+        <div class="combo-summary combo-summary-bubble">
+          <h3>Combo Summary</h3>
+          <p>Selected picks: <strong id="selectedCount">0</strong></p>
+          <p>Combined Odds: <strong id="combinedOdds">0.00</strong></p>
+          <p>Payout per $1: <strong id="payoutPerDollar">0.00</strong></p>
+          <p>Combined Model Probability: <strong id="combinedProb">0.000</strong></p>
+          <p>Combo Value: <strong id="comboValue">0.000</strong></p>
+          <p id="comboAdvice" class="message">Select picks to view the combined odds and value.</p>
+        </div>
+      {% elif not odds_enabled %}
+        <p class="message">No value pick data available because the Odds API key is not configured.</p>
+      {% else %}
+        <p class="message">No value picks are available right now.</p>
+      {% endif %}
+    </section>
+  </main>
+
+  <script>
+    const updateCombo = () => {
+      const checkboxes = document.querySelectorAll('.combo-checkbox');
+      let count = 0;
+      let combinedOdds = 1;
+      let combinedProb = 1;
+
+      checkboxes.forEach(checkbox => {
+        if (checkbox.checked) {
+          count += 1;
+          combinedOdds *= parseFloat(checkbox.dataset.odds) || 1;
+          combinedProb *= parseFloat(checkbox.dataset.prob) || 1;
+        }
+      });
+
+      const comboValue = combinedProb * combinedOdds - 1;
+      document.getElementById('selectedCount').textContent = count;
+      document.getElementById('combinedOdds').textContent = count ? combinedOdds.toFixed(3) : '0.00';
+      document.getElementById('payoutPerDollar').textContent = count ? combinedOdds.toFixed(2) : '0.00';
+      document.getElementById('combinedProb').textContent = count ? combinedProb.toFixed(3) : '0.000';
+      document.getElementById('comboValue').textContent = count ? comboValue.toFixed(3) : '0.000';
+
+      const advice = document.getElementById('comboAdvice');
+      if (count === 0) {
+        advice.textContent = 'Select picks to view the combined odds and value.';
+      } else if (comboValue > 0) {
+        advice.textContent = 'This combo has positive model value based on current probabilities.';
+      } else if (comboValue === 0) {
+        advice.textContent = 'This combo is break-even on the current model.';
+      } else {
+        advice.textContent = 'This combo is negative value based on current probabilities.';
+      }
+    };
+
+    document.querySelectorAll('.combo-checkbox').forEach(checkbox => checkbox.addEventListener('change', updateCombo));
+    updateCombo();
+  </script>
+</body>
+</html>
