@@ -9,8 +9,9 @@ app = Flask(__name__)
 load_dotenv()
 
 FOOTBALL_API_BASE = "https://api.football-data.org/v4"
-FOOTBALL_DATA_KEY = os.getenv("FOOTBALL_DATA_KEY")
+FOOTBALL_DATA_KEY = os.getenv("FOOTBALL_API_KEY")
 ODDS_API_KEY = os.getenv("ODDS_API_KEY")
+GA_MEASUREMENT_ID = os.getenv("GA_MEASUREMENT_ID")
 
 football_headers = {
     "X-Auth-Token": FOOTBALL_DATA_KEY
@@ -29,6 +30,11 @@ else:
     matches_collection = None
     odds_collection = None
     mongodb_available = False
+
+
+@app.context_processor
+def inject_ga_measurement_id():
+    return {"ga_measurement_id": GA_MEASUREMENT_ID}
 
 
 # -------------------------
