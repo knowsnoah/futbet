@@ -35,10 +35,10 @@
     </section>
 
     <div style="text-align: center; margin: 20px 0;">
-      <a href="{{ url_for('combos_page', refresh='true') }}" class="search-button" style="text-decoration: none;">Refresh Stats</a>
+      <button id="refreshStatsButton" class="search-button" type="button">Refresh Stats</button>
     </div>
 
-    <section class="section">
+    <section id="comboData" class="section">
       <h2>Available Value Picks</h2>
       {% if value_picks %}
         <p>Select two or more picks to see combined odds, probability, and model value.</p>
@@ -111,8 +111,46 @@
       }
     };
 
-    document.querySelectorAll('.combo-checkbox').forEach(checkbox => checkbox.addEventListener('change', updateCombo));
-    updateCombo();
+    const attachComboHandlers = () => {
+      document.querySelectorAll('.combo-checkbox').forEach(checkbox => checkbox.addEventListener('change', updateCombo));
+      updateCombo();
+    };
+
+    document.addEventListener('DOMContentLoaded', () => {
+      attachComboHandlers();
+
+      const refreshStatsButton = document.getElementById('refreshStatsButton');
+      if (refreshStatsButton) {
+        refreshStatsButton.addEventListener('click', async () => {
+          refreshStatsButton.disabled = true;
+          refreshStatsButton.textContent = 'Refreshing...';
+
+          try {
+            const response = await fetch(window.location.pathname + '?refresh=true');
+            if (!response.ok) {
+              throw new Error('Failed to refresh stats');
+            }
+
+            const html = await response.text();
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(html, 'text/html');
+            const newComboData = doc.getElementById('comboData');
+
+            if (newComboData) {
+              document.getElementById('comboData').innerHTML = newComboData.innerHTML;
+            }
+
+            attachComboHandlers();
+          } catch (err) {
+            console.error(err);
+            alert('Unable to refresh combo stats. Please try again.');
+          } finally {
+            refreshStatsButton.disabled = false;
+            refreshStatsButton.textContent = 'Refresh Stats';
+          }
+        });
+      }
+    });
   </script>
 </body>
 </html>

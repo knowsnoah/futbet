@@ -9,7 +9,7 @@ app = Flask(__name__)
 load_dotenv()
 
 FOOTBALL_API_BASE = "https://api.football-data.org/v4"
-FOOTBALL_DATA_KEY = os.getenv("FOOTBALL_API_KEY")
+FOOTBALL_DATA_KEY = os.getenv("FOOTBALL_DATA_KEY")
 ODDS_API_KEY = os.getenv("ODDS_API_KEY")
 GA_MEASUREMENT_ID = os.getenv("GA_MEASUREMENT_ID")
 
@@ -196,12 +196,13 @@ def get_last5(team_id, force_refresh=False):
 
 def get_next5(team_id, force_refresh=False):
     def fetch_next5():
-        url = f"{FOOTBALL_API_BASE}/teams/{team_id}/matches"
-        params = {"status": "SCHEDULED", "limit": 20}
-        data = safe_get_json(url, headers=football_headers, params=params)
-        matches = [m for m in data.get("matches", []) if is_premier_league_match(m)]
+        upcoming_matches = get_upcoming_league_matches(force_refresh=force_refresh)
+        matches = [
+            m for m in upcoming_matches
+            if m.get("homeTeam", {}).get("id") == team_id or m.get("awayTeam", {}).get("id") == team_id
+        ]
         return matches[:5]
-    
+
     return get_cached_data(matches_collection, f'next5_{team_id}', fetch_next5, max_age_hours=24, force_refresh=force_refresh)
 
 

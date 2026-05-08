@@ -44,7 +44,7 @@
     </section>
 
     <div style="text-align: center; margin: 20px 0;">
-      <a href="{{ url_for('home', refresh='true') }}" class="search-button" style="text-decoration: none;">Refresh Stats</a>
+      <button id="refreshStatsButton" class="search-button" type="button">Refresh Stats</button>
     </div>
 
     <div class="main-grid">
@@ -70,41 +70,81 @@
           {% endif %}
         </section>
 
-        <section class="section">
-          <h2>Upcoming Premier League Matches</h2>
-          {% if upcoming_matches %}
-            {% for match in upcoming_matches %}
-              <div class="match-card">
-                <div class="match-date">{{ match.utcDate[:10] }}</div>
-                <div class="match-title">{{ match.homeTeam.name }} vs {{ match.awayTeam.name }}</div>
-                <div class="match-meta">Status: {{ match.status }}</div>
-              </div>
-            {% endfor %}
-          {% else %}
-            <p class="message">No upcoming matches found.</p>
-          {% endif %}
-        </section>
+        <div id="upcomingMatches">
+          <section class="section">
+            <h2>Upcoming Premier League Matches</h2>
+            {% if upcoming_matches %}
+              {% for match in upcoming_matches %}
+                <div class="match-card">
+                  <div class="match-date">{{ match.utcDate[:10] }}</div>
+                  <div class="match-title">{{ match.homeTeam.name }} vs {{ match.awayTeam.name }}</div>
+                  <div class="match-meta">Status: {{ match.status }}</div>
+                </div>
+              {% endfor %}
+            {% else %}
+              <p class="message">No upcoming matches found.</p>
+            {% endif %}
+          </section>
+        </div>
       </div>
 
       <aside class="right-col">
-        <section class="section notification-card">
-          <h2>Value Picks</h2>
-          {% if value_picks %}
-            {% for pick in value_picks %}
+        <div id="valuePicks">
+          <section class="section notification-card">
+            <h2>Value Picks</h2>
+            {% if value_picks %}
+              {% for pick in value_picks %}
+                <div class="notification-card">
+                  <div class="notification-date">{{ pick.match.utcDate[:10] }}</div>
+                  <div class="notification-title">{{ pick.match.homeTeam.name }} vs {{ pick.match.awayTeam.name }}</div>
+                  <div class="notification-text">Bet on {{ pick.bet }}: Odds {{ pick.odds }}, Value {{ pick.value | round(3) }}</div>
+                </div>
+              {% endfor %}
+            {% else %}
               <div class="notification-card">
-                <div class="notification-date">{{ pick.match.utcDate[:10] }}</div>
-                <div class="notification-title">{{ pick.match.homeTeam.name }} vs {{ pick.match.awayTeam.name }}</div>
-                <div class="notification-text">Bet on {{ pick.bet }}: Odds {{ pick.odds }}, Value {{ pick.value | round(3) }}</div>
+                <div class="notification-text">No value picks available at the moment.</div>
               </div>
-            {% endfor %}
-          {% else %}
-            <div class="notification-card">
-              <div class="notification-text">No value picks available at the moment.</div>
-            </div>
-          {% endif %}
-        </section>
+            {% endif %}
+          </section>
+        </div>
       </aside>
     </div>
   </main>
+  <script>
+    const refreshStatsButton = document.getElementById('refreshStatsButton');
+    if (refreshStatsButton) {
+      refreshStatsButton.addEventListener('click', async () => {
+        refreshStatsButton.disabled = true;
+        refreshStatsButton.textContent = 'Refreshing...';
+
+        try {
+          const response = await fetch(window.location.pathname + '?refresh=true');
+          if (!response.ok) {
+            throw new Error('Failed to refresh stats');
+          }
+
+          const html = await response.text();
+          const parser = new DOMParser();
+          const doc = parser.parseFromString(html, 'text/html');
+
+          const newUpcoming = doc.getElementById('upcomingMatches');
+          const newValuePicks = doc.getElementById('valuePicks');
+
+          if (newUpcoming) {
+            document.getElementById('upcomingMatches').innerHTML = newUpcoming.innerHTML;
+          }
+          if (newValuePicks) {
+            document.getElementById('valuePicks').innerHTML = newValuePicks.innerHTML;
+          }
+        } catch (err) {
+          console.error(err);
+          alert('Unable to refresh stats. Please try again.');
+        } finally {
+          refreshStatsButton.disabled = false;
+          refreshStatsButton.textContent = 'Refresh Stats';
+        }
+      });
+    }
+  </script>
 </body>
 </html>
